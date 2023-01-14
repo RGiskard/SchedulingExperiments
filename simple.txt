@@ -1,1 +1,1 @@
-# a dimplete file text
+# a simple text file text
