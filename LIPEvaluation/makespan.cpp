@@ -35,7 +35,7 @@ Insertion time  | log(n) + Rebalance  | Same as search
 Deletion time   | log(n) + Rebalance  | Same as search
 */
 
-// typedef std::map< std::string, std::map<std::string, double> > Matrix;
+typedef std::map<std::string, std::map<std::string, GRBVar>> GRB_Matrix;
 typedef std::unordered_map<std::string, std::unordered_map<std::string, double>> Matrix;
 
 class Experiment_Data
@@ -104,10 +104,8 @@ Experiment_Data::Experiment_Data(Digraph &dig, DNodeStringMap &nodename, ArcValu
 int makespam(Matrix &mty)
 {
     cout << "Process ....." << endl;
-    Digraph dg;
-    string file_name;
-    // Experiment_Data dat;
-    Experiment_Data::read_xls(file_name, dg);
+    set<string> nodes;
+    set<string> tasks;
     int seed = 1;
     srand48(seed);
     GRBEnv env = GRBEnv();
@@ -118,18 +116,31 @@ int makespam(Matrix &mty)
     model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);            // is a minimization problem
                                                                 // Add one binary variable for each edge and also sets its cost in the objective function
     char name[1000];
-    map<int, GRBVar> x;
-    // Digraph::ArcMap<GRBVar> x(D.dg); // Variable to vehicle edges
-    // Digraph::ArcMap<GRBVar> y(D.dg); // Variable to drone edges
-    int totalVariables = 10;
-    for (int i = 0; i < totalVariables; i++)
+    GRB_Matrix x;
+    for (auto const &node : mty)
     {
-        std::string s = std::to_string(i);
-        sprintf(name, "x_%s", s.c_str());
-        x[i] = model.addVar(0.0, 1.0, 5, GRB_BINARY, name);
+        nodes.insert(node.first);
+        for (auto const &task : node.second)
+        {
+            tasks.insert(task.first);
+            sprintf(name, "%s execute %s", node.first.c_str(), task.first.c_str());
+            x[node.first][task.first] = model.addVar(0.0, 1.0, task.second, GRB_BINARY, name);
+        }
     }
     model.update();
+    /*Adding constraints*/
+    for (auto task : tasks)
+    {
+        GRBLinExpr sum_task;
+        for (auto node : nodes)
+        {
+            sum_task += x[node][task];
+        }
+        model.addConstr(sum_task == 1);
+    }
+
     model.optimize();
+    model.write("debug.lp");
     return 1;
 }
 int main(int argc, char *argv[])
@@ -139,7 +150,6 @@ int main(int argc, char *argv[])
     filename = argv[1];
     Matrix mtx;
     read_file(filename, mtx);
-    cout << mtx.size() << endl;
     makespam(mtx);
     return 0;
 }
